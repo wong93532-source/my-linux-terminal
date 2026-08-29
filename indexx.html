@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网页版 Linux 命令行系统</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+​body {
+font-family: 'JetBrains Mono', monospace;
+transition: background-color 0.3s, color 0.3s;
+}
+​body.theme-ubuntu { background-color: #0f172a; color: #f1f5f9; }
+body.theme-matrix { background-color: #050505; color: #22c55e; }
+body.theme-cyberpunk { background-color: #18002e; color: #ff007f; }
+body.theme-mac { background-color: #1e1e1e; color: #d4d4d4; }
+​.custom-scrollbar::-webkit-scrollbar { width: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+</style>
+</head>
+<body class="theme-ubuntu h-screen flex flex-col overflow-hidden">
+​<header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 px-4 py-2 flex items-center justify-between select-none">
+<div class="flex items-center space-x-2">
+<div class="flex space-x-1.5">
+<span class="w-3 h-3 rounded-full bg-red-500 inline-block cursor-pointer"></span>
+<span class="w-3 h-3 rounded-full bg-yellow-500 inline-block cursor-pointer"></span>
+<span class="w-3 h-3 rounded-full bg-green-500 inline-block cursor-pointer"></span>
+</div>
+<span class="text-xs opacity-75 ml-2 font-semibold">user@linux-sandbox: ~</span>
+</div>
+​<div class="flex items-center space-x-2 text-xs">
+<select id="theme-select" onchange="changeTheme(this.value)" class="bg-slate-700 text-slate-200 border border-slate-600 rounded px-2 py-1 outline-none">
+<option value="ubuntu">Ubuntu 暗蓝</option>
+<option value="matrix">Matrix 极客绿</option>
+<option value="cyberpunk">Cyberpunk 赛博朋克</option>
+<option value="mac">Mac 暗黑</option>
+</select>
+<button onclick="clearTerminal()" class="hover:bg-slate-700 p-1.5 rounded transition">
+<i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+</button>
+<button onclick="showHelp()" class="hover:bg-slate-700 p-1.5 rounded transition">
+<i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+</button>
+</div>
+</header>
+​<main id="terminal-container" class="flex-1 p-4 overflow-y-auto custom-scrollbar flex flex-col space-y-2 text-sm leading-relaxed" onclick="focusInput()">
+<div class="opacity-80">
+<p class="font-bold">欢迎使用网页版 Linux 终端高级系统</p>
+<p class="text-xs opacity-75">输入 <span class="font-bold underline">help</span> 查看可用命令。所有文件修改将自动保存在本地浏览器中。</p>
+
+</div>
+​<div id="output-area" class="flex flex-col space-y-2"></div>
+​<div id="input-line" class="flex items-center space-x-2">
+<span id="prompt-label" class="font-bold text-emerald-400">user@linux:~#</span>
+<div class="relative flex-1 flex items-center">
+<input
+type="text"
+id="command-input"
+class="w-full bg-transparent outline-none border-none font-mono caret-current"
+autofocus
+autocomplete="off"
+spellcheck="false"
+</div>
+</div>
+</main>
+​<input type="file" id="file-uploader" style="display: none;" onchange="handleFileUpload(event)">
+​<div id="editor-container" class="fixed inset-0 bg-slate-900 z-50 flex flex-col hidden p-2 font-mono">
+<div class="bg-slate-800 text-slate-200 px-4 py-1 flex justify-between items-center text-xs">
+<span>GNU nano 5.4 - <span id="editor-filename">untitled.txt</span></span>
+<span>文本编辑器</span>
+</div>
+<textarea id="editor-textarea" class="flex-1 bg-slate-950 text-emerald-400 p-3 outline-none resize-none font-mono text-sm leading-relaxed" spellcheck="false"></textarea>
+<div class="bg-slate-800 text-slate-300 px-4 py-2 text-xs flex justify-between items-center">
+<div>快捷键：[Ctrl + S] 保存并退出 | [Esc] 取消编辑</div>
+<button onclick="closeEditor(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs">保存并退出</button>
+</div>
+</div>
+​<footer class="bg-black/30 border-t border-slate-800 px-4 py-1 text-xs opacity-60 flex justify-between items-center select-none">
+<div>操作系统: Ubuntu Linux (网页沙盒)</div>
+<div>状态: 本地持久化存储已激活</div>
+</footer>
+​<script>
+lucide.createIcons();
+​const defaultFS = {
+"home": {
+type: "dir",
+content: {
+"user": {
+type: "dir",
+content: {
+"welcome.txt": { type: "file", content: "欢迎使用网页版 Linux 终端！\n你修改的文件内容在刷新页面后依然会保留。" },
+"demo.py": { type: "file", content: "print('你好，Linux 与 Python！')\nfor i in range(3):\n print(f'计数: {i}')" }
+}
+}
+}
+},
+"etc": { type: "dir", content: {} }
+};
+​let fileSystem = JSON.parse(localStorage.getItem('web_linux_fs')) || defaultFS;
+let currentPathArray = ["home", "user"];
+let commandHistory = JSON.parse(localStorage.getItem('web_linux_history')) || [];
+let historyIndex = -1;
+​let isPythonMode = false;
+​const inputField = document.getElementById('command-input');
+const outputArea = document.getElementById('output-area');
+const terminalContainer = document.getElementById('terminal-container');
+const promptLabel = document.getElementById('prompt-label');
+const editorContainer = document.getElementById('editor-container');
+const editorTextarea = document.getElementById('editor-textarea');
+const editorFilename = document.getElementById('editor-filename');
+let activeEditFile = null;
+​function saveFS() {
+localStorage.setItem('web_linux_fs', JSON.stringify(fileSystem));
+}
+​function saveHistory() {
+localStorage.setItem('web_linux_history', JSON.stringify(commandHistory));
+}
+​function getCurrentDirObj() {
+let current = fileSystem;
+for (let dir of currentPathArray) {
+if (current[dir] && current[dir].type === "dir") {
+current = current[dir].content;
+} else {
+return null;
+}
+}
+return current;
+}
+​function getCurrentPathString() {
+return "~/" + currentPathArray.join("/");
+}
+​function updatePrompt() {
+if (isPythonMode) {
+promptLabel.innerText = ">>>";
+promptLabel.className = "font-bold text-amber-400";
+} else {
+promptLabel.innerText = user@linux:latex
+{getCurrentPathString()}#; promptLabel.className = "font-bold text-emerald-400"; } } ​function focusInput() { inputField.focus(); } function clearTerminal() { outputArea.innerHTML = ''; focusInput(); } function showHelp() { processCommand("help"); } function scrollToBottom() { terminalContainer.scrollTop = terminalContainer.scrollHeight; } ​function changeTheme(themeName) { document.body.className = theme-
+
+{themeName} h-screen flex flex-col overflow-hidden;
+localStorage.setItem('web_linux_theme', themeName);
+}
+​const savedTheme = localStorage.getItem('web_linux_theme');
+if (savedTheme) {
+document.getElementById('theme-select').value = savedTheme;
+changeTheme(savedTheme);
+}
+​inputField.addEventListener('keydown', function(e) {
+if (e.key === 'Enter') {
+const cmdText = inputField.value;
+inputField.value = '';
+​if (cmdText.trim() && !isPythonMode) {
+commandHistory.push(cmdText);
+historyIndex = commandHistory.length;
+saveHistory();
+}
+​appendCommandEcho(cmdText);
+​if (isPythonMode) {
+handlePythonInput(cmdText);
+} else if (cmdText.trim()) {
+processCommand(cmdText.trim());
+}
+scrollToBottom();
+} else if (e.key === 'ArrowUp' && !isPythonMode) {
+if (commandHistory.length > 0 && historyIndex > 0) {
+historyIndex--;
+inputField.value = commandHistory[historyIndex];
+}
+e.preventDefault();
+} else if (e.key === 'ArrowDown' && !isPythonMode) {
+if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+historyIndex++;
+inputField.value = commandHistory[historyIndex];
+} else {
+historyIndex = commandHistory.length;
+inputField.value = '';
+}
+e.preventDefault();
+}
+});
+​function appendCommandEcho(cmd) {
+const div = document.createElement('div');
+div.className = 'flex items-center space-x-2 opacity-90';
+div.innerHTML = <span class="{promptLabel.innerText}</span> <span>latex
+{escapeHtml(cmd)}&lt;/span&gt;; outputArea.appendChild(div); } ​function appendOutput(htmlContent, isError = false) { const div = document.createElement('div'); div.className = text-sm whitespace-pre-wrap 
+
+{isError ? 'text-red-400' : 'opacity-90'};
+div.innerHTML = htmlContent;
+outputArea.appendChild(div);
+scrollToBottom();
+}
+​function escapeHtml(text) {
+return text.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
+}
+​function processCommand(fullCmd) {
+const args = parseArgs(fullCmd);
+const cmd = args[0];
+const params = args.slice(1);
+const dirObj = getCurrentDirObj();
+​switch (cmd) {
+case 'help':
+appendOutput(可用命令帮助： <span class="text-amber-300 font-semibold">nano / vim</span> [文件] 使用内置文本编辑器编辑文件 <span class="text-amber-300 font-semibold">python3</span> [文件.py] 进入 Python 交互模式或运行 Python 脚本 <span class="text-amber-300 font-semibold">ping</span> [主机] 模拟网络延迟测试 <span class="text-amber-300 font-semibold">download</span> [文件] 将文件下载到本地设备 <span class="text-amber-300 font-semibold">upload</span> 上传本地文件到当前目录 <span class="text-amber-300 font-semibold">ls</span> / <span class="text-amber-300 font-semibold">cd</span> / <span class="text-amber-300 font-semibold">pwd</span> / <span class="text-amber-300 font-semibold">cat</span> 基础目录浏览与文件查看 <span class="text-amber-300 font-semibold">mkdir</span> / <span class="text-amber-300 font-semibold">touch</span> / <span class="text-amber-300 font-semibold">rm</span> 创建与管理文件或目录 <span class="text-amber-300 font-semibold">clear</span> / <span class="text-amber-300 font-semibold">history</span> 清空终端或查看历史命令);
+break;
+​case 'nano':
+case 'vim':
+if (!params[0]) {
+appendOutput("错误：请指定文件名。示例：nano test.txt", true);
+break;
+}
+openEditor(params[0]);
+break;
+​case 'python3':
+case 'python':
+if (params[0]) {
+if (dirObj[params[0]] && dirObj[params[0]].type === 'file') {
+runPythonScript(dirObj[params[0]].content);
+} else {
+appendOutput(python3: 未找到文件：latex
+{params[0]}, true); } } else { isPythonMode = true; updatePrompt(); appendOutput("Python 3.10.12 (主版本, 网页沙盒环境)\n输入 'exit()' 或 'quit()' 退出 Python 模式。"); } break; ​case 'ping': if (!params[0]) { appendOutput("ping: 缺少目标主机参数", true); break; } simulatePing(params[0]); break; ​case 'download': if (!params[0] || !dirObj[params[0]]) { appendOutput(download: 未找到文件：
+
+{params[0]}, true);
+break;
+}
+if (dirObj[params[0]].type === 'dir') {
+appendOutput("download: 无法下载目录", true);
+break;
+}
+downloadFile(params[0], dirObj[params[0]].content);
+break;
+​case 'upload':
+document.getElementById('file-uploader').click();
+break;
+​case 'ls':
+let keys = Object.keys(dirObj);
+let formatted = keys.map(k => dirObj[k].type === 'dir' ? <span class="text-blue-400 font-bold">latex
+{k}/&lt;/span&gt; : k).join(' '); appendOutput(formatted || "(空目录)"); break; ​case 'cd': let target = params[0]; if (!target || target === '~') { currentPathArray = ["home", "user"]; } else if (target === '..') { if (currentPathArray.length &gt; 0) currentPathArray.pop(); } else if (dirObj[target] && dirObj[target].type === 'dir') { currentPathArray.push(target); } else { appendOutput(cd: 
+
+{target}: 没有该目录, true);
+}
+updatePrompt();
+break;
+​case 'cat':
+if (params[0] && dirObj[params[0]] && dirObj[params[0]].type === 'file') {
+appendOutput(escapeHtml(dirObj[params[0]].content));
+} else {
+appendOutput(cat: 无法读取文件 latex
+{params[0]}, true); } break; ​case 'touch': if (params[0]) { dirObj[params[0]] = { type: 'file', content: '' }; saveFS(); } break; ​case 'mkdir': if (params[0]) { dirObj[params[0]] = { type: 'dir', content: {} }; saveFS(); } break; ​case 'rm': if (params[0] && dirObj[params[0]]) { delete dirObj[params[0]]; saveFS(); } else { appendOutput(rm: 无法删除 '
+
+{params[0]}', true);
+}
+break;
+​case 'pwd':
+appendOutput("/" + currentPathArray.join("/"));
+break;
+​case 'clear':
+clearTerminal();
+break;
+​default:
+appendOutput(bash: latex
+{cmd}: 未找到命令。输入 help 查看帮助。, true); break; } } ​function openEditor(filename) { activeEditFile = filename; editorFilename.innerText = filename; const dirObj = getCurrentDirObj(); editorTextarea.value = (dirObj[filename] && dirObj[filename].type === 'file') ? dirObj[filename].content : ''; editorContainer.classList.remove('hidden'); editorTextarea.focus(); } ​function closeEditor(shouldSave) { if (shouldSave && activeEditFile) { const dirObj = getCurrentDirObj(); dirObj[activeEditFile] = { type: 'file', content: editorTextarea.value }; saveFS(); appendOutput([已保存文件 
+
+{activeEditFile}]);
+}
+editorContainer.classList.add('hidden');
+focusInput();
+}
+​editorTextarea.addEventListener('keydown', function(e) {
+if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+e.preventDefault();
+closeEditor(true);
+} else if (e.key === 'Escape') {
+closeEditor(false);
+}
+});
+​function handlePythonInput(input) {
+if (input.trim() === 'exit()' || input.trim() === 'quit()') {
+isPythonMode = false;
+updatePrompt();
+appendOutput("已退出 Python 会话。");
+return;
+}
+if (input.startsWith('print(')) {
+let match = input.match(/print((.*))/);
+if (match) {
+try {
+let res = eval(match[1]);
+appendOutput(String(res));
+} catch (err) {
+appendOutput(NameError: latex
+{err.message}, true); } } } else if (input.trim() !== '') { try { let res = eval(input); if (res !== undefined) appendOutput(String(res)); } catch (err) { appendOutput(SyntaxError / NameError: 无效的 Python 表达式, true); } } } ​function runPythonScript(code) { let lines = code.split('\n'); lines.forEach(line =&gt; { line = line.trim(); if (line.startsWith('print(')) { let match = line.match(/print((.*))/); if (match) { try { appendOutput(eval(match[1])); } catch (e) {} } } }); } ​function simulatePing(host) { appendOutput(PING 
+
+{host} (127.0.0.1) 56(84) 字节的数据。);
+let count = 0;
+let timer = setInterval(() => {
+count++;
+let time = (Math.random() * 20 + 10).toFixed(2);
+appendOutput(来自 {count} ttl=64 时间=latex
+{time} ms); if (count &gt;= 4) { clearInterval(timer); appendOutput(--- 
+
+{host} ping 统计信息 ---\n已发送 4 个包，已接收 4 个包，0% 丢包率);
+}
+}, 800);
+}
+​function downloadFile(filename, content) {
+const blob = new Blob([content], { type: 'text/plain' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = filename;
+a.click();
+URL.revokeObjectURL(url);
+appendOutput(已开始下载：latex
+{filename}); } ​function handleFileUpload(event) { const file = event.target.files[0]; if (!file) return; ​const reader = new FileReader(); reader.onload = function(e) { const dirObj = getCurrentDirObj(); dirObj[file.name] = { type: 'file', content: e.target.result }; saveFS(); appendOutput(成功上传 '
+
+{file.name}' 到当前目录！输入 'ls' 查看。);
+};
+reader.readAsText(file);
+}
+​function parseArgs(str) {
+let args = [], current = '', inQuotes = false;
+for (let i = 0; i < str.length; i++) {
+let char = str[i];
+if (char === '"' || char === "'") { inQuotes = !inQuotes; }
+else if (char === ' ' && !inQuotes) { if (current) { args.push(current); current = ''; } }
+else { current += char; }
+}
+if (current) args.push(current);
+return args;
+}
+</script>
+</body>
+</html>
