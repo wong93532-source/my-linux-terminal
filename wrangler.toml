@@ -1,5 +1,4 @@
 name = "patient-haze-193c"
 compatibility_date = "2026-08-30"
 
-[site]
-bucket = "."
+assets = { directory = "." }
