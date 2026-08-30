@@ -3,333 +3,420 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>网页版 Linux 命令行系统</title>
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<title>Terminal - Linux Emulated Shell</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-​body {
-font-family: 'JetBrains Mono', monospace;
+:root {
+--bg: #0d1117;
+--fg: #c9d1d9;
+--prompt-user: #79c0ff;
+--prompt-host: #56d364;
+--prompt-path: #e3b341;
+--accent: #a5d6ff;
+--error: #ff7b72;
+--selection: #163356;
+--font-family: 'Fira Code', 'Courier New', Courier, monospace;
+}
+
+[data-theme="matrix"] {
+--bg: #000000;
+--fg: #00ff66;
+--prompt-user: #00ff66;
+--prompt-host: #00cc55;
+--prompt-path: #02993d;
+--accent: #66ff99;
+--error: #ff3333;
+--selection: #003311;
+}
+
+[data-theme="dracula"] {
+--bg: #282a36;
+--fg: #f8f8f2;
+--prompt-user: #bd93f9;
+--prompt-host: #50fa7b;
+--prompt-path: #f1fa8c;
+--accent: #8be9fd;
+--error: #ff5555;
+--selection: #44475a;
+}
+
+[data-theme="nord"] {
+--bg: #2e3440;
+--fg: #eceff4;
+--prompt-user: #88c0d0;
+--prompt-host: #a3be8c;
+--prompt-path: #ebcb8b;
+--accent: #81a1c1;
+--error: #bf616a;
+--selection: #434c5e;
+}
+
+[data-theme="cyberpunk"] {
+--bg: #120024;
+--fg: #00f0ff;
+--prompt-user: #ff0055;
+--prompt-host: #ffe600;
+--prompt-path: #00f0ff;
+--accent: #ff0055;
+--error: #ff0033;
+--selection: #3a005c;
+}
+
+* {
+box-sizing: border-box;
+margin: 0;
+padding: 0;
+}
+
+body, html {
+width: 100%;
+height: 100%;
+background-color: var(--bg);
+color: var(--fg);
+font-family: var(--font-family);
+font-size: 15px;
+line-height: 1.5;
+overflow: hidden;
 transition: background-color 0.3s, color 0.3s;
 }
-​body.theme-ubuntu { background-color: #0f172a; color: #f1f5f9; }
-body.theme-matrix { background-color: #050505; color: #22c55e; }
-body.theme-cyberpunk { background-color: #18002e; color: #ff007f; }
-body.theme-mac { background-color: #1e1e1e; color: #d4d4d4; }
-​.custom-scrollbar::-webkit-scrollbar { width: 8px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+
+#terminal {
+width: 100%;
+height: 100%;
+padding: 16px;
+overflow-y: auto;
+display: flex;
+flex-direction: column;
+word-break: break-all;
+}
+
+.line {
+display: flex;
+flex-wrap: wrap;
+align-items: center;
+margin-bottom: 4px;
+}
+
+.prompt {
+white-space: nowrap;
+margin-right: 8px;
+font-weight: bold;
+}
+
+.user { color: var(--prompt-user); }
+.host { color: var(--prompt-host); }
+.path { color: var(--prompt-path); }
+
+.input-area {
+display: flex;
+flex: 1;
+align-items: center;
+min-width: 200px;
+}
+
+input#cmd-input {
+background: transparent;
+border: none;
+outline: none;
+color: inherit;
+font-family: inherit;
+font-size: inherit;
+width: 100%;
+caret-color: var(--accent);
+}
+
+.output {
+margin-bottom: 8px;
+white-space: pre-wrap;
+}
+
+.error { color: var(--error); }
+.accent { color: var(--accent); }
+.success { color: var(--prompt-host); }
+
+::selection {
+background: var(--selection);
+}
+
+#matrix-canvas {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+z-index: 100;
+background: #000;
+display: none;
+}
+
+/* Scrollbar */
+#terminal::-webkit-scrollbar {
+width: 8px;
+}
+#terminal::-webkit-scrollbar-track {
+background: transparent;
+}
+#terminal::-webkit-scrollbar-thumb {
+background: rgba(255, 255, 255, 0.2);
+border-radius: 4px;
+}
 </style>
 </head>
-<body class="theme-ubuntu h-screen flex flex-col overflow-hidden">
-​<header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 px-4 py-2 flex items-center justify-between select-none">
-<div class="flex items-center space-x-2">
-<div class="flex space-x-1.5">
-<span class="w-3 h-3 rounded-full bg-red-500 inline-block cursor-pointer"></span>
-<span class="w-3 h-3 rounded-full bg-yellow-500 inline-block cursor-pointer"></span>
-<span class="w-3 h-3 rounded-full bg-green-500 inline-block cursor-pointer"></span>
-</div>
-<span class="text-xs opacity-75 ml-2 font-semibold">user@linux-sandbox: ~</span>
-</div>
-​<div class="flex items-center space-x-2 text-xs">
-<select id="theme-select" onchange="changeTheme(this.value)" class="bg-slate-700 text-slate-200 border border-slate-600 rounded px-2 py-1 outline-none">
-<option value="ubuntu">Ubuntu 暗蓝</option>
-<option value="matrix">Matrix 极客绿</option>
-<option value="cyberpunk">Cyberpunk 赛博朋克</option>
-<option value="mac">Mac 暗黑</option>
-</select>
-<button onclick="clearTerminal()" class="hover:bg-slate-700 p-1.5 rounded transition">
-<i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-</button>
-<button onclick="showHelp()" class="hover:bg-slate-700 p-1.5 rounded transition">
-<i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-</button>
-</div>
-</header>
-​<main id="terminal-container" class="flex-1 p-4 overflow-y-auto custom-scrollbar flex flex-col space-y-2 text-sm leading-relaxed" onclick="focusInput()">
-<div class="opacity-80">
-<p class="font-bold">欢迎使用网页版 Linux 终端高级系统</p>
-<p class="text-xs opacity-75">输入 <span class="font-bold underline">help</span> 查看可用命令。所有文件修改将自动保存在本地浏览器中。</p>
+<body>
 
-</div>
-​<div id="output-area" class="flex flex-col space-y-2"></div>
-​<div id="input-line" class="flex items-center space-x-2">
-<span id="prompt-label" class="font-bold text-emerald-400">user@linux:~#</span>
-<div class="relative flex-1 flex items-center">
-<input
-type="text"
-id="command-input"
-class="w-full bg-transparent outline-none border-none font-mono caret-current"
-autofocus
-autocomplete="off"
-spellcheck="false"
+<div id="terminal" onclick="document.getElementById('cmd-input').focus()">
+<div id="history"></div>
+<div class="line" id="input-line">
+<span class="prompt">
+<span class="user">guest</span>@<span class="host">linux-term</span>:<span class="path">~</span>$
+</span>
+<div class="input-area">
+<input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false" />
 </div>
 </div>
-</main>
-​<input type="file" id="file-uploader" style="display: none;" onchange="handleFileUpload(event)">
-​<div id="editor-container" class="fixed inset-0 bg-slate-900 z-50 flex flex-col hidden p-2 font-mono">
-<div class="bg-slate-800 text-slate-200 px-4 py-1 flex justify-between items-center text-xs">
-<span>GNU nano 5.4 - <span id="editor-filename">untitled.txt</span></span>
-<span>文本编辑器</span>
 </div>
-<textarea id="editor-textarea" class="flex-1 bg-slate-950 text-emerald-400 p-3 outline-none resize-none font-mono text-sm leading-relaxed" spellcheck="false"></textarea>
-<div class="bg-slate-800 text-slate-300 px-4 py-2 text-xs flex justify-between items-center">
-<div>快捷键：[Ctrl + S] 保存并退出 | [Esc] 取消编辑</div>
-<button onclick="closeEditor(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs">保存并退出</button>
-</div>
-</div>
-​<footer class="bg-black/30 border-t border-slate-800 px-4 py-1 text-xs opacity-60 flex justify-between items-center select-none">
-<div>操作系统: Ubuntu Linux (网页沙盒)</div>
-<div>状态: 本地持久化存储已激活</div>
-</footer>
-​<script>
-lucide.createIcons();
-​const defaultFS = {
-"home": {
-type: "dir",
-content: {
-"user": {
-type: "dir",
-content: {
-"welcome.txt": { type: "file", content: "欢迎使用网页版 Linux 终端！\n你修改的文件内容在刷新页面后依然会保留。" },
-"demo.py": { type: "file", content: "print('你好，Linux 与 Python！')\nfor i in range(3):\n print(f'计数: {i}')" }
-}
-}
-}
-},
-"etc": { type: "dir", content: {} }
-};
-​let fileSystem = JSON.parse(localStorage.getItem('web_linux_fs')) || defaultFS;
-let currentPathArray = ["home", "user"];
-let commandHistory = JSON.parse(localStorage.getItem('web_linux_history')) || [];
+
+<canvas id="matrix-canvas"></canvas>
+
+<script>
+const input = document.getElementById('cmd-input');
+const historyContainer = document.getElementById('history');
+const terminal = document.getElementById('terminal');
+const matrixCanvas = document.getElementById('matrix-canvas');
+const ctx = matrixCanvas.getContext('2d');
+
+let cmdHistory = [];
 let historyIndex = -1;
-​let isPythonMode = false;
-​const inputField = document.getElementById('command-input');
-const outputArea = document.getElementById('output-area');
-const terminalContainer = document.getElementById('terminal-container');
-const promptLabel = document.getElementById('prompt-label');
-const editorContainer = document.getElementById('editor-container');
-const editorTextarea = document.getElementById('editor-textarea');
-const editorFilename = document.getElementById('editor-filename');
-let activeEditFile = null;
-​function saveFS() {
-localStorage.setItem('web_linux_fs', JSON.stringify(fileSystem));
-}
-​function saveHistory() {
-localStorage.setItem('web_linux_history', JSON.stringify(commandHistory));
-}
-​function getCurrentDirObj() {
-let current = fileSystem;
-for (let dir of currentPathArray) {
-if (current[dir] && current[dir].type === "dir") {
-current = current[dir].content;
+let currentTheme = 'default';
+
+const welcomeMessage = ┌──────────────────────────────────────────────────────────┐ │ Welcome to Linux Terminal Web Shell v2.0 │ │ Type &lt;span class="accent"&gt;'help'&lt;/span&gt; for available commands. │ │ Type &lt;span class="accent"&gt;'theme [name]'&lt;/span&gt; to switch color themes. │ └──────────────────────────────────────────────────────────┘;
+
+// Initialize terminal welcome
+window.onload = () => {
+printOutput(welcomeMessage, true);
+};
+
+const commands = {
+'help': () => &lt;b&gt;常用命令列表：&lt;/b&gt; &lt;span class="accent"&gt;help&lt;/span&gt; - 显示帮助信息 &lt;span class="accent"&gt;neofetch&lt;/span&gt; - 显示系统概览信息 &lt;span class="accent"&gt;theme [name]&lt;/span&gt; - 切换色彩主题 (default, matrix, dracula, nord, cyberpunk) &lt;span class="accent"&gt;clear&lt;/span&gt; - 清屏 &lt;span class="accent"&gt;whoami&lt;/span&gt; - 显示当前用户名 &lt;span class="accent"&gt;date&lt;/span&gt; - 显示系统当前时间 &lt;span class="accent"&gt;uptime&lt;/span&gt; - 查看运行时间 &lt;span class="accent"&gt;matrix&lt;/span&gt; - 进入 Matrix 矩阵代码雨效果 &lt;span class="accent"&gt;snake&lt;/span&gt; - 启动终端贪吃蛇小游戏 &lt;span class="accent"&gt;echo [text]&lt;/span&gt; - 输出指定文本 &lt;span class="accent"&gt;uname -a&lt;/span&gt; - 查看内核/系统版本信息,
+'whoami': () => 'guest',
+'date': () => new Date().toLocaleString('zh-CN'),
+'uptime': () => `17:58:19 up 42 days, 3 hours, 12 mins, 1 user, load average: 0.12, 0.08, 0.04`,
+'uname': (args) => args.includes('-a') ? 'Linux web-terminal 6.6.0-cloud-amd64 #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux' : 'Linux',
+'clear': () => {
+historyContainer.innerHTML = '';
+return null;
+},
+'neofetch': () => &lt;span class="accent"&gt; .---. &lt;/span&gt; &lt;b&gt;guest&lt;/b&gt;@&lt;b&gt;wongweitian.ccwu.cc&lt;/b&gt; &lt;span class="accent"&gt; / \\ &lt;/span&gt; ------------------------- &lt;span class="accent"&gt; | () () | &lt;/span&gt; &lt;b&gt;OS&lt;/b&gt;: Web Linux Emulated Terminal &lt;span class="accent"&gt; \\ == / &lt;/span&gt; &lt;b&gt;Kernel&lt;/b&gt;: 6.6.0-cloud-amd64 &lt;span class="accent"&gt; \----` </span> <b>Uptime</b>: 42 days
+<b>Shell</b>: bash 5.2.15
+<b>Theme</b>: ${currentTheme}
+<b>Host</b>: Cloudflare Workers Engine
+, 'echo': (args) =&gt; args.join(' '), 'theme': (args) =&gt; { const themes = ['default', 'matrix', 'dracula', 'nord', 'cyberpunk']; const name = args[0]; if (!name) return \当前主题: <b>${currentTheme}&lt;/b&gt;&lt;br&gt;可用主题: \${themes.join(', ')}`;
+if (themes.includes(name)) {
+currentTheme = name;
+if (name === 'default') {
+document.documentElement.removeAttribute('data-theme');
 } else {
+document.documentElement.setAttribute('data-theme', name);
+}
+return `<span class="success">主题已切换至 ${name}&lt;/span&gt;\;
+}
+return `<span class="error">未知主题。可用主题: `${themes.join(', ')}</span>`;
+},
+'matrix': () => {
+startMatrix();
+return null;
+},
+'snake': () => {
+startSnake();
 return null;
 }
-}
-return current;
-}
-​function getCurrentPathString() {
-return "~/" + currentPathArray.join("/");
-}
-​function updatePrompt() {
-if (isPythonMode) {
-promptLabel.innerText = ">>>";
-promptLabel.className = "font-bold text-amber-400";
-} else {
-promptLabel.innerText = user@linux:latex
-{getCurrentPathString()}#; promptLabel.className = "font-bold text-emerald-400"; } } ​function focusInput() { inputField.focus(); } function clearTerminal() { outputArea.innerHTML = ''; focusInput(); } function showHelp() { processCommand("help"); } function scrollToBottom() { terminalContainer.scrollTop = terminalContainer.scrollHeight; } ​function changeTheme(themeName) { document.body.className = theme-
+};
 
-{themeName} h-screen flex flex-col overflow-hidden;
-localStorage.setItem('web_linux_theme', themeName);
-}
-​const savedTheme = localStorage.getItem('web_linux_theme');
-if (savedTheme) {
-document.getElementById('theme-select').value = savedTheme;
-changeTheme(savedTheme);
-}
-​inputField.addEventListener('keydown', function(e) {
+input.addEventListener('keydown', (e) => {
 if (e.key === 'Enter') {
-const cmdText = inputField.value;
-inputField.value = '';
-​if (cmdText.trim() && !isPythonMode) {
-commandHistory.push(cmdText);
-historyIndex = commandHistory.length;
-saveHistory();
-}
-​appendCommandEcho(cmdText);
-​if (isPythonMode) {
-handlePythonInput(cmdText);
-} else if (cmdText.trim()) {
-processCommand(cmdText.trim());
-}
-scrollToBottom();
-} else if (e.key === 'ArrowUp' && !isPythonMode) {
-if (commandHistory.length > 0 && historyIndex > 0) {
+const rawCmd = input.value.trim();
+input.value = '';
+if (!rawCmd) return;
+
+cmdHistory.push(rawCmd);
+historyIndex = cmdHistory.length;
+
+printPromptLine(rawCmd);
+executeCommand(rawCmd);
+terminal.scrollTop = terminal.scrollHeight;
+} else if (e.key === 'ArrowUp') {
+e.preventDefault();
+if (historyIndex > 0) {
 historyIndex--;
-inputField.value = commandHistory[historyIndex];
+input.value = cmdHistory[historyIndex];
 }
+} else if (e.key === 'ArrowDown') {
 e.preventDefault();
-} else if (e.key === 'ArrowDown' && !isPythonMode) {
-if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+if (historyIndex < cmdHistory.length - 1) {
 historyIndex++;
-inputField.value = commandHistory[historyIndex];
+input.value = cmdHistory[historyIndex];
 } else {
-historyIndex = commandHistory.length;
-inputField.value = '';
+historyIndex = cmdHistory.length;
+input.value = '';
 }
-e.preventDefault();
 }
 });
-​function appendCommandEcho(cmd) {
-const div = document.createElement('div');
-div.className = 'flex items-center space-x-2 opacity-90';
-div.innerHTML = <span class="{promptLabel.innerText}</span> <span>latex
-{escapeHtml(cmd)}&lt;/span&gt;; outputArea.appendChild(div); } ​function appendOutput(htmlContent, isError = false) { const div = document.createElement('div'); div.className = text-sm whitespace-pre-wrap 
 
-{isError ? 'text-red-400' : 'opacity-90'};
-div.innerHTML = htmlContent;
-outputArea.appendChild(div);
-scrollToBottom();
+function printPromptLine(cmdText) {
+const line = document.createElement('div');
+line.className = 'line';
+line.innerHTML = &lt;span class="prompt"&gt; &lt;span class="user"&gt;guest&lt;/span&gt;@&lt;span class="host"&gt;linux-term&lt;/span&gt;:&lt;span class="path"&gt;~&lt;/span&gt;$ &lt;/span&gt; &lt;span&gt;\${escapeHtml(cmdText)}&lt;/span&gt;;
+historyContainer.appendChild(line);
 }
-​function escapeHtml(text) {
-return text.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
+
+function printOutput(htmlContent, isRaw = false) {
+if (htmlContent === null) return;
+const output = document.createElement('div');
+output.className = 'output';
+output.innerHTML = isRaw ? htmlContent : htmlContent;
+historyContainer.appendChild(output);
 }
-​function processCommand(fullCmd) {
-const args = parseArgs(fullCmd);
-const cmd = args[0];
-const params = args.slice(1);
-const dirObj = getCurrentDirObj();
-​switch (cmd) {
-case 'help':
-appendOutput(可用命令帮助： <span class="text-amber-300 font-semibold">nano / vim</span> [文件] 使用内置文本编辑器编辑文件 <span class="text-amber-300 font-semibold">python3</span> [文件.py] 进入 Python 交互模式或运行 Python 脚本 <span class="text-amber-300 font-semibold">ping</span> [主机] 模拟网络延迟测试 <span class="text-amber-300 font-semibold">download</span> [文件] 将文件下载到本地设备 <span class="text-amber-300 font-semibold">upload</span> 上传本地文件到当前目录 <span class="text-amber-300 font-semibold">ls</span> / <span class="text-amber-300 font-semibold">cd</span> / <span class="text-amber-300 font-semibold">pwd</span> / <span class="text-amber-300 font-semibold">cat</span> 基础目录浏览与文件查看 <span class="text-amber-300 font-semibold">mkdir</span> / <span class="text-amber-300 font-semibold">touch</span> / <span class="text-amber-300 font-semibold">rm</span> 创建与管理文件或目录 <span class="text-amber-300 font-semibold">clear</span> / <span class="text-amber-300 font-semibold">history</span> 清空终端或查看历史命令);
-break;
-​case 'nano':
-case 'vim':
-if (!params[0]) {
-appendOutput("错误：请指定文件名。示例：nano test.txt", true);
-break;
-}
-openEditor(params[0]);
-break;
-​case 'python3':
-case 'python':
-if (params[0]) {
-if (dirObj[params[0]] && dirObj[params[0]].type === 'file') {
-runPythonScript(dirObj[params[0]].content);
+
+function executeCommand(rawInput) {
+const parts = rawInput.split(' ').filter(Boolean);
+const mainCmd = parts[0].toLowerCase();
+const args = parts.slice(1);
+
+if (commands[mainCmd]) {
+const res = commandsmainCmd;
+printOutput(res);
 } else {
-appendOutput(python3: 未找到文件：latex
-{params[0]}, true); } } else { isPythonMode = true; updatePrompt(); appendOutput("Python 3.10.12 (主版本, 网页沙盒环境)\n输入 'exit()' 或 'quit()' 退出 Python 模式。"); } break; ​case 'ping': if (!params[0]) { appendOutput("ping: 缺少目标主机参数", true); break; } simulatePing(params[0]); break; ​case 'download': if (!params[0] || !dirObj[params[0]]) { appendOutput(download: 未找到文件：
+printOutput(`<span class="error">bash: command not found: ${escapeHtml(mainCmd)}&lt;/span&gt;\);
+}
+}
 
-{params[0]}, true);
-break;
+function escapeHtml(str) {
+return str.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
 }
-if (dirObj[params[0]].type === 'dir') {
-appendOutput("download: 无法下载目录", true);
-break;
-}
-downloadFile(params[0], dirObj[params[0]].content);
-break;
-​case 'upload':
-document.getElementById('file-uploader').click();
-break;
-​case 'ls':
-let keys = Object.keys(dirObj);
-let formatted = keys.map(k => dirObj[k].type === 'dir' ? <span class="text-blue-400 font-bold">latex
-{k}/&lt;/span&gt; : k).join(' '); appendOutput(formatted || "(空目录)"); break; ​case 'cd': let target = params[0]; if (!target || target === '~') { currentPathArray = ["home", "user"]; } else if (target === '..') { if (currentPathArray.length &gt; 0) currentPathArray.pop(); } else if (dirObj[target] && dirObj[target].type === 'dir') { currentPathArray.push(target); } else { appendOutput(cd: 
 
-{target}: 没有该目录, true);
+// Matrix Rain Effect
+let matrixInterval;
+function startMatrix() {
+matrixCanvas.style.display = 'block';
+matrixCanvas.width = window.innerWidth;
+matrixCanvas.height = window.innerHeight;
+
+const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#`$%^&*()';
+const fontSize = 14;
+const columns = Math.floor(matrixCanvas.width / fontSize);
+const drops = Array(columns).fill(1);
+
+function draw() {
+ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+ctx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+ctx.fillStyle = '#0f0';
+ctx.font = fontSize + 'px monospace';
+
+for (let i = 0; i < drops.length; i++) {
+const text = chars[Math.floor(Math.random() * chars.length)];
+ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+if (drops[i] * fontSize > matrixCanvas.height && Math.random() > 0.975) {
+drops[i] = 0;
 }
-updatePrompt();
-break;
-​case 'cat':
-if (params[0] && dirObj[params[0]] && dirObj[params[0]].type === 'file') {
-appendOutput(escapeHtml(dirObj[params[0]].content));
+drops[i]++;
+}
+}
+
+matrixInterval = setInterval(draw, 33);
+
+const stopMatrix = () => {
+clearInterval(matrixInterval);
+matrixCanvas.style.display = 'none';
+window.removeEventListener('keydown', stopMatrix);
+window.removeEventListener('click', stopMatrix);
+printOutput('<span class="success">已退出 Matrix 效果。</span>');
+};
+
+setTimeout(() => {
+window.addEventListener('keydown', stopMatrix);
+window.addEventListener('click', stopMatrix);
+}, 100);
+}
+
+// Interactive Terminal Snake Game
+function startSnake() {
+printOutput('<span class="accent">--- 终端贪吃蛇小游戏启动 ---</span><br>使用键盘 <span class="accent">W / A / S / D</span> 或 <span class="accent">方向键</span> 控制方向，按 <span class="error">Q</span> 退出游戏。');
+
+const gameContainer = document.createElement('div');
+gameContainer.className = 'output';
+historyContainer.appendChild(gameContainer);
+
+const width = 20;
+const height = 10;
+let snake = [{x: 5, y: 5}, {x: 4, y: 5}];
+let food = {x: 12, y: 5};
+let dir = {x: 1, y: 0};
+let score = 0;
+
+function drawBoard() {
+let board = '';
+for (let y = 0; y < height; y++) {
+for (let x = 0; x < width; x++) {
+if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+board += '#';
+} else if (snake.some(segment => segment.x === x && segment.y === y)) {
+board += 'O';
+} else if (food.x === x && food.y === y) {
+board += '*';
 } else {
-appendOutput(cat: 无法读取文件 latex
-{params[0]}, true); } break; ​case 'touch': if (params[0]) { dirObj[params[0]] = { type: 'file', content: '' }; saveFS(); } break; ​case 'mkdir': if (params[0]) { dirObj[params[0]] = { type: 'dir', content: {} }; saveFS(); } break; ​case 'rm': if (params[0] && dirObj[params[0]]) { delete dirObj[params[0]]; saveFS(); } else { appendOutput(rm: 无法删除 '
+board += ' ';
+}
+}
+board += '<br>';
+}
+gameContainer.innerHTML = `<pre style="font-family:monospace; line-height:1">${board}&lt;/pre&gt;Score: \${score}`;
+}
 
-{params[0]}', true);
-}
-break;
-​case 'pwd':
-appendOutput("/" + currentPathArray.join("/"));
-break;
-​case 'clear':
-clearTerminal();
-break;
-​default:
-appendOutput(bash: latex
-{cmd}: 未找到命令。输入 help 查看帮助。, true); break; } } ​function openEditor(filename) { activeEditFile = filename; editorFilename.innerText = filename; const dirObj = getCurrentDirObj(); editorTextarea.value = (dirObj[filename] && dirObj[filename].type === 'file') ? dirObj[filename].content : ''; editorContainer.classList.remove('hidden'); editorTextarea.focus(); } ​function closeEditor(shouldSave) { if (shouldSave && activeEditFile) { const dirObj = getCurrentDirObj(); dirObj[activeEditFile] = { type: 'file', content: editorTextarea.value }; saveFS(); appendOutput([已保存文件 
-
-{activeEditFile}]);
-}
-editorContainer.classList.add('hidden');
-focusInput();
-}
-​editorTextarea.addEventListener('keydown', function(e) {
-if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-e.preventDefault();
-closeEditor(true);
-} else if (e.key === 'Escape') {
-closeEditor(false);
-}
-});
-​function handlePythonInput(input) {
-if (input.trim() === 'exit()' || input.trim() === 'quit()') {
-isPythonMode = false;
-updatePrompt();
-appendOutput("已退出 Python 会话。");
+const keyHandler = (e) => {
+if (e.key === 'q' || e.key === 'Q') {
+endGame('游戏已退出');
 return;
 }
-if (input.startsWith('print(')) {
-let match = input.match(/print((.*))/);
-if (match) {
-try {
-let res = eval(match[1]);
-appendOutput(String(res));
-} catch (err) {
-appendOutput(NameError: latex
-{err.message}, true); } } } else if (input.trim() !== '') { try { let res = eval(input); if (res !== undefined) appendOutput(String(res)); } catch (err) { appendOutput(SyntaxError / NameError: 无效的 Python 表达式, true); } } } ​function runPythonScript(code) { let lines = code.split('\n'); lines.forEach(line =&gt; { line = line.trim(); if (line.startsWith('print(')) { let match = line.match(/print((.*))/); if (match) { try { appendOutput(eval(match[1])); } catch (e) {} } } }); } ​function simulatePing(host) { appendOutput(PING 
-
-{host} (127.0.0.1) 56(84) 字节的数据。);
-let count = 0;
-let timer = setInterval(() => {
-count++;
-let time = (Math.random() * 20 + 10).toFixed(2);
-appendOutput(来自 {count} ttl=64 时间=latex
-{time} ms); if (count &gt;= 4) { clearInterval(timer); appendOutput(--- 
-
-{host} ping 统计信息 ---\n已发送 4 个包，已接收 4 个包，0% 丢包率);
-}
-}, 800);
-}
-​function downloadFile(filename, content) {
-const blob = new Blob([content], { type: 'text/plain' });
-const url = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = url;
-a.download = filename;
-a.click();
-URL.revokeObjectURL(url);
-appendOutput(已开始下载：latex
-{filename}); } ​function handleFileUpload(event) { const file = event.target.files[0]; if (!file) return; ​const reader = new FileReader(); reader.onload = function(e) { const dirObj = getCurrentDirObj(); dirObj[file.name] = { type: 'file', content: e.target.result }; saveFS(); appendOutput(成功上传 '
-
-{file.name}' 到当前目录！输入 'ls' 查看。);
+if (['ArrowUp', 'w', 'W'].includes(e.key) && dir.y === 0) dir = {x: 0, y: -1};
+if (['ArrowDown', 's', 'S'].includes(e.key) && dir.y === 0) dir = {x: 0, y: 1};
+if (['ArrowLeft', 'a', 'A'].includes(e.key) && dir.x === 0) dir = {x: -1, y: 0};
+if (['ArrowRight', 'd', 'D'].includes(e.key) && dir.x === 0) dir = {x: 1, y: 0};
 };
-reader.readAsText(file);
+
+window.addEventListener('keydown', keyHandler);
+
+const gameLoop = setInterval(() => {
+const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+// Collision Check
+if (head.x <= 0 || head.x >= width - 1 || head.y <= 0 || head.y >= height - 1 ||
+snake.some(s => s.x === head.x && s.y === head.y)) {
+endGame('Game Over!');
+return;
 }
-​function parseArgs(str) {
-let args = [], current = '', inQuotes = false;
-for (let i = 0; i < str.length; i++) {
-let char = str[i];
-if (char === '"' || char === "'") { inQuotes = !inQuotes; }
-else if (char === ' ' && !inQuotes) { if (current) { args.push(current); current = ''; } }
-else { current += char; }
+
+snake.unshift(head);
+
+if (head.x === food.x && head.y === food.y) {
+score += 10;
+food = {
+x: Math.floor(Math.random() * (width - 2)) + 1,
+y: Math.floor(Math.random() * (height - 2)) + 1
+};
+} else {
+snake.pop();
 }
-if (current) args.push(current);
-return args;
+
+drawBoard();
+}, 200);
+
+function endGame(msg) {
+clearInterval(gameLoop);
+window.removeEventListener('keydown', keyHandler);
+printOutput(`<span class="error">${msg} 最终得分: \${score}</span>`);
+}
+
+drawBoard();
 }
 </script>
 </body>
