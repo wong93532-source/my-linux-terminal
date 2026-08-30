@@ -1,4 +1,5 @@
 name = "patient-haze-193c"
 compatibility_date = "2026-08-30"
 
-assets = { directory = "." }
+[assets]
+directory = "."
