@@ -1,423 +1,237 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Terminal - Linux Emulated Shell</title>
-<style>
-:root {
---bg: #0d1117;
---fg: #c9d1d9;
---prompt-user: #79c0ff;
---prompt-host: #56d364;
---prompt-path: #e3b341;
---accent: #a5d6ff;
---error: #ff7b72;
---selection: #163356;
---font-family: 'Fira Code', 'Courier New', Courier, monospace;
-}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Linux Terminal</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-[data-theme="matrix"] {
---bg: #000000;
---fg: #00ff66;
---prompt-user: #00ff66;
---prompt-host: #00cc55;
---prompt-path: #02993d;
---accent: #66ff99;
---error: #ff3333;
---selection: #003311;
-}
+        body {
+            background-color: #121212;
+            color: #00ff66;
+            font-family: "Courier New", Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
 
-[data-theme="dracula"] {
---bg: #282a36;
---fg: #f8f8f2;
---prompt-user: #bd93f9;
---prompt-host: #50fa7b;
---prompt-path: #f1fa8c;
---accent: #8be9fd;
---error: #ff5555;
---selection: #44475a;
-}
+        .terminal {
+            width: 100%;
+            max-width: 900px;
+            height: 500px;
+            background-color: #0c0c0c;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
 
-[data-theme="nord"] {
---bg: #2e3440;
---fg: #eceff4;
---prompt-user: #88c0d0;
---prompt-host: #a3be8c;
---prompt-path: #ebcb8b;
---accent: #81a1c1;
---error: #bf616a;
---selection: #434c5e;
-}
+        .terminal-header {
+            background-color: #1f1f1f;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
 
-[data-theme="cyberpunk"] {
---bg: #120024;
---fg: #00f0ff;
---prompt-user: #ff0055;
---prompt-host: #ffe600;
---prompt-path: #00f0ff;
---accent: #ff0055;
---error: #ff0033;
---selection: #3a005c;
-}
+        .buttons {
+            display: flex;
+            gap: 8px;
+        }
 
-* {
-box-sizing: border-box;
-margin: 0;
-padding: 0;
-}
+        .btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
 
-body, html {
-width: 100%;
-height: 100%;
-background-color: var(--bg);
-color: var(--fg);
-font-family: var(--font-family);
-font-size: 15px;
-line-height: 1.5;
-overflow: hidden;
-transition: background-color 0.3s, color 0.3s;
-}
+        .close { background-color: #ff5f56; }
+        .minimize { background-color: #ffbd2e; }
+        .maximize { background-color: #27c93f; }
 
-#terminal {
-width: 100%;
-height: 100%;
-padding: 16px;
-overflow-y: auto;
-display: flex;
-flex-direction: column;
-word-break: break-all;
-}
+        .title {
+            color: #888;
+            font-size: 14px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
-.line {
-display: flex;
-flex-wrap: wrap;
-align-items: center;
-margin-bottom: 4px;
-}
+        .terminal-body {
+            padding: 15px;
+            flex-grow: 1;
+            overflow-y: auto;
+            font-size: 15px;
+            line-height: 1.5;
+        }
 
-.prompt {
-white-space: nowrap;
-margin-right: 8px;
-font-weight: bold;
-}
+        .output-line {
+            margin-bottom: 5px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
 
-.user { color: var(--prompt-user); }
-.host { color: var(--prompt-host); }
-.path { color: var(--prompt-path); }
+        .input-line {
+            display: flex;
+            align-items: center;
+        }
 
-.input-area {
-display: flex;
-flex: 1;
-align-items: center;
-min-width: 200px;
-}
+        .prompt {
+            color: #00bfff;
+            margin-right: 8px;
+            white-space: nowrap;
+        }
 
-input#cmd-input {
-background: transparent;
-border: none;
-outline: none;
-color: inherit;
-font-family: inherit;
-font-size: inherit;
-width: 100%;
-caret-color: var(--accent);
-}
+        .cmd-input {
+            background: transparent;
+            border: none;
+            color: #00ff66;
+            font-family: inherit;
+            font-size: inherit;
+            flex-grow: 1;
+            outline: none;
+        }
 
-.output {
-margin-bottom: 8px;
-white-space: pre-wrap;
-}
-
-.error { color: var(--error); }
-.accent { color: var(--accent); }
-.success { color: var(--prompt-host); }
-
-::selection {
-background: var(--selection);
-}
-
-#matrix-canvas {
-position: fixed;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-z-index: 100;
-background: #000;
-display: none;
-}
-
-/* Scrollbar */
-#terminal::-webkit-scrollbar {
-width: 8px;
-}
-#terminal::-webkit-scrollbar-track {
-background: transparent;
-}
-#terminal::-webkit-scrollbar-thumb {
-background: rgba(255, 255, 255, 0.2);
-border-radius: 4px;
-}
-</style>
+        .error { color: #ff5555; }
+        .system { color: #aaa; }
+    </style>
 </head>
 <body>
 
-<div id="terminal" onclick="document.getElementById('cmd-input').focus()">
-<div id="history"></div>
-<div class="line" id="input-line">
-<span class="prompt">
-<span class="user">guest</span>@<span class="host">linux-term</span>:<span class="path">~</span>$
-</span>
-<div class="input-area">
-<input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false" />
+<div class="terminal">
+    <div class="terminal-header">
+        <div class="buttons">
+            <span class="btn close"></span>
+            <span class="btn minimize"></span>
+            <span class="btn maximize"></span>
+        </div>
+        <div class="title">user@web-linux: ~</div>
+    </div>
+    
+    <div class="terminal-body" id="terminal-body">
+        <div class="output-line system">欢迎使用 Web Linux 模拟终端！输入 'help' 获取可用的命令列表。</div>
+        <div class="input-line">
+            <span class="prompt">user@linux:~$</span>
+            <input type="text" class="cmd-input" id="cmd-input" autofocus autocomplete="off" spellcheck="false">
+        </div>
+    </div>
 </div>
-</div>
-</div>
-
-<canvas id="matrix-canvas"></canvas>
 
 <script>
-const input = document.getElementById('cmd-input');
-const historyContainer = document.getElementById('history');
-const terminal = document.getElementById('terminal');
-const matrixCanvas = document.getElementById('matrix-canvas');
-const ctx = matrixCanvas.getContext('2d');
+    const terminalBody = document.getElementById('terminal-body');
+    const cmdInput = document.getElementById('cmd-input');
+    const inputLine = document.querySelector('.input-line');
 
-let cmdHistory = [];
-let historyIndex = -1;
-let currentTheme = 'default';
+    // 虚拟文件系统与状态
+    let currentPath = '~';
+    const virtualFS = {
+        '~': ['documents', 'downloads', 'readme.txt'],
+        '~/documents': ['notes.txt', 'project.js'],
+        '~/downloads': ['image.png']
+    };
 
-const welcomeMessage = ┌──────────────────────────────────────────────────────────┐ │ Welcome to Linux Terminal Web Shell v2.0 │ │ Type &lt;span class="accent"&gt;'help'&lt;/span&gt; for available commands. │ │ Type &lt;span class="accent"&gt;'theme [name]'&lt;/span&gt; to switch color themes. │ └──────────────────────────────────────────────────────────┘;
+    // 命令集定义
+    const commands = {
+        'help': () => '可用命令:\n  ls       - 列出当前目录中的文件\n  cd <dir> - 切换目录 (支持 cd .. 或 cd <folder>)\n  pwd      - 显示当前工作目录\n  clear    - 清屏\n  echo     - 输出指定文本\n  whoami   - 显示当前用户\n  date     - 显示系统时间',
+        'pwd': () => `/home/user${currentPath === '~' ? '' : currentPath.replace('~', '')}`,
+        'whoami': () => 'user',
+        'date': () => new Date().toString(),
+        'ls': () => {
+            const files = virtualFS[currentPath] || [];
+            return files.length > 0 ? files.join('  ') : '目录为空';
+        }
+    };
 
-// Initialize terminal welcome
-window.onload = () => {
-printOutput(welcomeMessage, true);
-};
+    // 监听回车键输入
+    cmdInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const fullCommand = this.value.trim();
+            const args = fullCommand.split(' ');
+            const cmd = args[0].toLowerCase();
+            const param = args[1];
 
-const commands = {
-'help': () => &lt;b&gt;常用命令列表：&lt;/b&gt; &lt;span class="accent"&gt;help&lt;/span&gt; - 显示帮助信息 &lt;span class="accent"&gt;neofetch&lt;/span&gt; - 显示系统概览信息 &lt;span class="accent"&gt;theme [name]&lt;/span&gt; - 切换色彩主题 (default, matrix, dracula, nord, cyberpunk) &lt;span class="accent"&gt;clear&lt;/span&gt; - 清屏 &lt;span class="accent"&gt;whoami&lt;/span&gt; - 显示当前用户名 &lt;span class="accent"&gt;date&lt;/span&gt; - 显示系统当前时间 &lt;span class="accent"&gt;uptime&lt;/span&gt; - 查看运行时间 &lt;span class="accent"&gt;matrix&lt;/span&gt; - 进入 Matrix 矩阵代码雨效果 &lt;span class="accent"&gt;snake&lt;/span&gt; - 启动终端贪吃蛇小游戏 &lt;span class="accent"&gt;echo [text]&lt;/span&gt; - 输出指定文本 &lt;span class="accent"&gt;uname -a&lt;/span&gt; - 查看内核/系统版本信息,
-'whoami': () => 'guest',
-'date': () => new Date().toLocaleString('zh-CN'),
-'uptime': () => `17:58:19 up 42 days, 3 hours, 12 mins, 1 user, load average: 0.12, 0.08, 0.04`,
-'uname': (args) => args.includes('-a') ? 'Linux web-terminal 6.6.0-cloud-amd64 #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux' : 'Linux',
-'clear': () => {
-historyContainer.innerHTML = '';
-return null;
-},
-'neofetch': () => &lt;span class="accent"&gt; .---. &lt;/span&gt; &lt;b&gt;guest&lt;/b&gt;@&lt;b&gt;wongweitian.ccwu.cc&lt;/b&gt; &lt;span class="accent"&gt; / \\ &lt;/span&gt; ------------------------- &lt;span class="accent"&gt; | () () | &lt;/span&gt; &lt;b&gt;OS&lt;/b&gt;: Web Linux Emulated Terminal &lt;span class="accent"&gt; \\ == / &lt;/span&gt; &lt;b&gt;Kernel&lt;/b&gt;: 6.6.0-cloud-amd64 &lt;span class="accent"&gt; \----` </span> <b>Uptime</b>: 42 days
-<b>Shell</b>: bash 5.2.15
-<b>Theme</b>: ${currentTheme}
-<b>Host</b>: Cloudflare Workers Engine
-, 'echo': (args) =&gt; args.join(' '), 'theme': (args) =&gt; { const themes = ['default', 'matrix', 'dracula', 'nord', 'cyberpunk']; const name = args[0]; if (!name) return \当前主题: <b>${currentTheme}&lt;/b&gt;&lt;br&gt;可用主题: \${themes.join(', ')}`;
-if (themes.includes(name)) {
-currentTheme = name;
-if (name === 'default') {
-document.documentElement.removeAttribute('data-theme');
-} else {
-document.documentElement.setAttribute('data-theme', name);
-}
-return `<span class="success">主题已切换至 ${name}&lt;/span&gt;\;
-}
-return `<span class="error">未知主题。可用主题: `${themes.join(', ')}</span>`;
-},
-'matrix': () => {
-startMatrix();
-return null;
-},
-'snake': () => {
-startSnake();
-return null;
-}
-};
+            // 1. 打印用户刚刚输入的命令
+            printOutput(`user@linux:${currentPath}$ ${fullCommand}`, 'prompt-copy');
 
-input.addEventListener('keydown', (e) => {
-if (e.key === 'Enter') {
-const rawCmd = input.value.trim();
-input.value = '';
-if (!rawCmd) return;
+            // 2. 解析并执行命令
+            if (fullCommand !== '') {
+                executeCommand(cmd, param, fullCommand);
+            }
 
-cmdHistory.push(rawCmd);
-historyIndex = cmdHistory.length;
+            // 3. 清空输入框并将输入行移至底部
+            this.value = '';
+            terminalBody.appendChild(inputLine);
+            cmdInput.focus();
+            terminalBody.scrollTop = terminalBody.scrollHeight;
+        }
+    });
 
-printPromptLine(rawCmd);
-executeCommand(rawCmd);
-terminal.scrollTop = terminal.scrollHeight;
-} else if (e.key === 'ArrowUp') {
-e.preventDefault();
-if (historyIndex > 0) {
-historyIndex--;
-input.value = cmdHistory[historyIndex];
-}
-} else if (e.key === 'ArrowDown') {
-e.preventDefault();
-if (historyIndex < cmdHistory.length - 1) {
-historyIndex++;
-input.value = cmdHistory[historyIndex];
-} else {
-historyIndex = cmdHistory.length;
-input.value = '';
-}
-}
-});
+    function executeCommand(cmd, param, fullCommand) {
+        if (cmd === 'clear') {
+            // 清屏操作
+            const lines = terminalBody.querySelectorAll('.output-line');
+            lines.forEach(line => line.remove());
+            return;
+        }
 
-function printPromptLine(cmdText) {
-const line = document.createElement('div');
-line.className = 'line';
-line.innerHTML = &lt;span class="prompt"&gt; &lt;span class="user"&gt;guest&lt;/span&gt;@&lt;span class="host"&gt;linux-term&lt;/span&gt;:&lt;span class="path"&gt;~&lt;/span&gt;$ &lt;/span&gt; &lt;span&gt;\${escapeHtml(cmdText)}&lt;/span&gt;;
-historyContainer.appendChild(line);
-}
+        if (cmd === 'echo') {
+            printOutput(fullCommand.substring(5));
+            return;
+        }
 
-function printOutput(htmlContent, isRaw = false) {
-if (htmlContent === null) return;
-const output = document.createElement('div');
-output.className = 'output';
-output.innerHTML = isRaw ? htmlContent : htmlContent;
-historyContainer.appendChild(output);
-}
+        if (cmd === 'cd') {
+            handleCd(param);
+            return;
+        }
 
-function executeCommand(rawInput) {
-const parts = rawInput.split(' ').filter(Boolean);
-const mainCmd = parts[0].toLowerCase();
-const args = parts.slice(1);
+        if (commands[cmd]) {
+            printOutput(commands[cmd]());
+        } else {
+            printOutput(`bash: command not found: ${cmd}`, 'error');
+        }
+    }
 
-if (commands[mainCmd]) {
-const res = commandsmainCmd;
-printOutput(res);
-} else {
-printOutput(`<span class="error">bash: command not found: ${escapeHtml(mainCmd)}&lt;/span&gt;\);
-}
-}
+    function handleCd(param) {
+        if (!param || param === '~') {
+            currentPath = '~';
+        } else if (param === '..') {
+            if (currentPath !== '~') {
+                const parts = currentPath.split('/');
+                parts.pop();
+                currentPath = parts.join('/') || '~';
+            }
+        } else {
+            const targetPath = currentPath === '~' ? `~/${param}` : `${currentPath}/${param}`;
+            if (virtualFS[targetPath]) {
+                currentPath = targetPath;
+            } else {
+                printOutput(`bash: cd: ${param}: No such file or directory`, 'error');
+            }
+        }
+        document.querySelector('.title').innerText = `user@web-linux: ${currentPath}`;
+        document.querySelector('.prompt').innerText = `user@linux:${currentPath}$`;
+    }
 
-function escapeHtml(str) {
-return str.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
-}
+    function printOutput(text, className = '') {
+        const div = document.createElement('div');
+        div.className = `output-line ${className}`;
+        div.textContent = text;
+        terminalBody.insertBefore(div, inputLine);
+    }
 
-// Matrix Rain Effect
-let matrixInterval;
-function startMatrix() {
-matrixCanvas.style.display = 'block';
-matrixCanvas.width = window.innerWidth;
-matrixCanvas.height = window.innerHeight;
-
-const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#`$%^&*()';
-const fontSize = 14;
-const columns = Math.floor(matrixCanvas.width / fontSize);
-const drops = Array(columns).fill(1);
-
-function draw() {
-ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-ctx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
-ctx.fillStyle = '#0f0';
-ctx.font = fontSize + 'px monospace';
-
-for (let i = 0; i < drops.length; i++) {
-const text = chars[Math.floor(Math.random() * chars.length)];
-ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
-if (drops[i] * fontSize > matrixCanvas.height && Math.random() > 0.975) {
-drops[i] = 0;
-}
-drops[i]++;
-}
-}
-
-matrixInterval = setInterval(draw, 33);
-
-const stopMatrix = () => {
-clearInterval(matrixInterval);
-matrixCanvas.style.display = 'none';
-window.removeEventListener('keydown', stopMatrix);
-window.removeEventListener('click', stopMatrix);
-printOutput('<span class="success">已退出 Matrix 效果。</span>');
-};
-
-setTimeout(() => {
-window.addEventListener('keydown', stopMatrix);
-window.addEventListener('click', stopMatrix);
-}, 100);
-}
-
-// Interactive Terminal Snake Game
-function startSnake() {
-printOutput('<span class="accent">--- 终端贪吃蛇小游戏启动 ---</span><br>使用键盘 <span class="accent">W / A / S / D</span> 或 <span class="accent">方向键</span> 控制方向，按 <span class="error">Q</span> 退出游戏。');
-
-const gameContainer = document.createElement('div');
-gameContainer.className = 'output';
-historyContainer.appendChild(gameContainer);
-
-const width = 20;
-const height = 10;
-let snake = [{x: 5, y: 5}, {x: 4, y: 5}];
-let food = {x: 12, y: 5};
-let dir = {x: 1, y: 0};
-let score = 0;
-
-function drawBoard() {
-let board = '';
-for (let y = 0; y < height; y++) {
-for (let x = 0; x < width; x++) {
-if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
-board += '#';
-} else if (snake.some(segment => segment.x === x && segment.y === y)) {
-board += 'O';
-} else if (food.x === x && food.y === y) {
-board += '*';
-} else {
-board += ' ';
-}
-}
-board += '<br>';
-}
-gameContainer.innerHTML = `<pre style="font-family:monospace; line-height:1">${board}&lt;/pre&gt;Score: \${score}`;
-}
-
-const keyHandler = (e) => {
-if (e.key === 'q' || e.key === 'Q') {
-endGame('游戏已退出');
-return;
-}
-if (['ArrowUp', 'w', 'W'].includes(e.key) && dir.y === 0) dir = {x: 0, y: -1};
-if (['ArrowDown', 's', 'S'].includes(e.key) && dir.y === 0) dir = {x: 0, y: 1};
-if (['ArrowLeft', 'a', 'A'].includes(e.key) && dir.x === 0) dir = {x: -1, y: 0};
-if (['ArrowRight', 'd', 'D'].includes(e.key) && dir.x === 0) dir = {x: 1, y: 0};
-};
-
-window.addEventListener('keydown', keyHandler);
-
-const gameLoop = setInterval(() => {
-const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
-
-// Collision Check
-if (head.x <= 0 || head.x >= width - 1 || head.y <= 0 || head.y >= height - 1 ||
-snake.some(s => s.x === head.x && s.y === head.y)) {
-endGame('Game Over!');
-return;
-}
-
-snake.unshift(head);
-
-if (head.x === food.x && head.y === food.y) {
-score += 10;
-food = {
-x: Math.floor(Math.random() * (width - 2)) + 1,
-y: Math.floor(Math.random() * (height - 2)) + 1
-};
-} else {
-snake.pop();
-}
-
-drawBoard();
-}, 200);
-
-function endGame(msg) {
-clearInterval(gameLoop);
-window.removeEventListener('keydown', keyHandler);
-printOutput(`<span class="error">${msg} 最终得分: \${score}</span>`);
-}
-
-drawBoard();
-}
+    // 点击终端任意区域自动聚焦输入框
+    document.querySelector('.terminal').addEventListener('click', () => {
+        cmdInput.focus();
+    });
 </script>
+
 </body>
 </html>
