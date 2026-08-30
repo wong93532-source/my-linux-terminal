@@ -117,7 +117,7 @@
     </div>
     
     <div class="terminal-body" id="terminal-body">
-        <div class="output-line system">欢迎使用 Web Linux 模拟终端！输入 'help' 获取可用的命令列表。（作者：瓦钿）</div>
+        <div class="output-line system">欢迎使用 Web Linux 模拟终端！输入 'help' 获取可用的命令列表。（作者=瓦钿）</div>
         <div class="input-line">
             <span class="prompt">user@linux:~$</span>
             <input type="text" class="cmd-input" id="cmd-input" autofocus autocomplete="off" spellcheck="false">
@@ -138,25 +138,43 @@
         '~/downloads': ['image.png']
     };
 
+    // 文件内容映射表
+    const fileContents = {
+        '~/readme.txt': '欢迎来到 Web Linux 模拟器！这是默认示例文件。',
+        '~/documents/notes.txt': '这是一份学习笔记。',
+        '~/documents/project.js': 'console.log("Hello, World!");'
+    };
+
+    // 命令历史记录状态
+    const history = [];
+    let historyIndex = -1;
+
     // 命令集定义
     const commands = {
-        'help': () => '可用命令:\n  ls       - 列出当前目录中的文件\n  cd <dir> - 切换目录 (支持 cd .. 或 cd <folder>)\n  pwd      - 显示当前工作目录\n  clear    - 清屏\n  echo     - 输出指定文本\n  whoami   - 显示当前用户\n  date     - 显示系统时间',
+        'help': () => '可用命令:\n  ls           - 列出当前目录中的文件\n  cd <dir>     - 切换目录 (支持 cd .. 或 cd <folder>)\n  pwd          - 显示当前工作目录\n  mkdir <dir>  - 创建新目录\n  touch <file> - 创建空文件\n  cat <file>   - 查看文件内容\n  clear        - 清屏\n  echo         - 输出指定文本\n  history      - 查看历史命令\n  whoami       - 显示当前用户\n  date         - 显示系统时间',
         'pwd': () => `/home/user${currentPath === '~' ? '' : currentPath.replace('~', '')}`,
         'whoami': () => 'user',
         'date': () => new Date().toString(),
         'ls': () => {
             const files = virtualFS[currentPath] || [];
             return files.length > 0 ? files.join('  ') : '目录为空';
-        }
+        },
+        'history': () => history.map((cmd, idx) => ` ${idx + 1}  ${cmd}`).join('\n')
     };
 
-    // 监听回车键输入
+    // 监听键盘事件（回车键 + 上下方向键）
     cmdInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
             const fullCommand = this.value.trim();
             const args = fullCommand.split(' ');
             const cmd = args[0].toLowerCase();
             const param = args[1];
+
+            // 保存历史记录
+            if (fullCommand !== '') {
+                history.push(fullCommand);
+                historyIndex = history.length;
+            }
 
             // 1. 打印用户刚刚输入的命令
             printOutput(`user@linux:${currentPath}$ ${fullCommand}`, 'prompt-copy');
@@ -171,6 +189,23 @@
             terminalBody.appendChild(inputLine);
             cmdInput.focus();
             terminalBody.scrollTop = terminalBody.scrollHeight;
+        } else if (e.key === 'ArrowUp') {
+            // 切换上一条历史命令
+            e.preventDefault();
+            if (history.length > 0 && historyIndex > 0) {
+                historyIndex--;
+                this.value = history[historyIndex];
+            }
+        } else if (e.key === 'ArrowDown') {
+            // 切换下一条历史命令
+            e.preventDefault();
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                this.value = history[historyIndex];
+            } else {
+                historyIndex = history.length;
+                this.value = '';
+            }
         }
     });
 
@@ -189,6 +224,21 @@
 
         if (cmd === 'cd') {
             handleCd(param);
+            return;
+        }
+
+        if (cmd === 'mkdir') {
+            handleMkdir(param);
+            return;
+        }
+
+        if (cmd === 'touch') {
+            handleTouch(param);
+            return;
+        }
+
+        if (cmd === 'cat') {
+            handleCat(param);
             return;
         }
 
@@ -218,6 +268,49 @@
         }
         document.querySelector('.title').innerText = `user@web-linux: ${currentPath}`;
         document.querySelector('.prompt').innerText = `user@linux:${currentPath}$`;
+    }
+
+    function handleMkdir(param) {
+        if (!param) {
+            printOutput('mkdir: missing operand', 'error');
+            return;
+        }
+        const currentList = virtualFS[currentPath] || [];
+        if (currentList.includes(param)) {
+            printOutput(`mkdir: cannot create directory '${param}': File exists`, 'error');
+            return;
+        }
+        currentList.push(param);
+        const newDirPath = currentPath === '~' ? `~/${param}` : `${currentPath}/${param}`;
+        virtualFS[newDirPath] = [];
+    }
+
+    function handleTouch(param) {
+        if (!param) {
+            printOutput('touch: missing file operand', 'error');
+            return;
+        }
+        const currentList = virtualFS[currentPath] || [];
+        if (!currentList.includes(param)) {
+            currentList.push(param);
+        }
+        const filePath = currentPath === '~' ? `~/${param}` : `${currentPath}/${param}`;
+        if (fileContents[filePath] === undefined) {
+            fileContents[filePath] = '';
+        }
+    }
+
+    function handleCat(param) {
+        if (!param) {
+            printOutput('cat: missing file operand', 'error');
+            return;
+        }
+        const filePath = currentPath === '~' ? `~/${param}` : `${currentPath}/${param}`;
+        if (fileContents[filePath] !== undefined) {
+            printOutput(fileContents[filePath]);
+        } else {
+            printOutput(`cat: ${param}: No such file or directory`, 'error');
+        }
     }
 
     function printOutput(text, className = '') {
